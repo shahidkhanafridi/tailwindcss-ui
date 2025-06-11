@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Users List with Features</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    .dropdown { position: absolute; z-index: 10; display: none; background: white; border: 1px solid #ccc; padding: 0.5rem; border-radius: 0.25rem; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1); }
+    .dropdown.show { display: block; }
+  </style>
+</head>
+<body class="bg-gray-100">
+
+<div class="flex min-h-screen">
+
+  <!-- Sidebar -->
+  <aside class="w-64 bg-white shadow-md">
+    <div class="p-6 font-bold text-xl border-b border-gray-200">CoreERP</div>
+    <nav class="p-4 space-y-2">
+      <a href="dashboard.html" class="block py-2 px-4 rounded hover:bg-blue-50 text-gray-700">Dashboard</a>
+        <a href="users.html" class="block py-2 px-4 rounded bg-blue-100 text-blue-800 font-semibold">Users</a>
+        <a href="#" class="block py-2 px-4 rounded hover:bg-blue-50 text-gray-700">Reports</a>
+        <a href="#" class="block py-2 px-4 rounded hover:bg-blue-50 text-gray-700">Settings</a>
+    </nav>
+  </aside>
+
+  <!-- Main Content -->
+  <main class="flex-1 p-8 relative">
+
+    <div class="flex justify-between mb-6">
+      <h1 class="text-2xl font-semibold">Users</h1>
+      <button class="bg-red-500 text-white px-4 py-1 rounded hover:bg-red-600 text-sm">Logout</button>
+    </div>
+
+    <!-- Filters -->
+    <div class="flex flex-col md:flex-row gap-4 mb-6">
+      <input id="searchInput" type="text" placeholder="Search..." class="w-full md:w-1/3 px-4 py-2 border rounded"/>
+      <select id="roleFilter" class="w-full md:w-1/4 px-4 py-2 border rounded">
+        <option value="All">All Roles</option>
+      </select>
+      <select id="deptFilter" class="w-full md:w-1/4 px-4 py-2 border rounded">
+        <option value="All">All Departments</option>
+      </select>
+    </div>
+
+    <!-- Table -->
+    <div class="overflow-x-auto bg-white rounded shadow">
+      <table class="min-w-full divide-y divide-gray-200">
+        <thead class="bg-gray-50">
+          <tr>
+            <th class="px-6 py-3 text-left cursor-pointer" onclick="sortTable('name')">Name</th>
+            <th class="px-6 py-3 text-left cursor-pointer" onclick="sortTable('email')">Email</th>
+            <th class="px-6 py-3 text-left flex items-center gap-1">
+              <span class="cursor-pointer" onclick="sortTable('role')">Role</span>
+              <span class="text-xs cursor-pointer" onclick="toggleDropdown('role')">🔽</span>
+              <div id="dropdown-role" class="dropdown"></div>
+            </th>
+            <th class="px-6 py-3 text-left flex items-center gap-1">
+              <span class="cursor-pointer" onclick="sortTable('department')">Department</span>
+              <span class="text-xs cursor-pointer" onclick="toggleDropdown('department')">🔽</span>
+              <div id="dropdown-department" class="dropdown"></div>
+            </th>
+            <th class="px-6 py-3 text-right">Actions</th>
+          </tr>
+        </thead>
+        <tbody id="userTable" class="divide-y divide-gray-200"></tbody>
+      </table>
+    </div>
+
+    <!-- Pagination -->
+    <div class="flex justify-between items-center mt-6">
+      <p id="pageInfo" class="text-sm text-gray-600"></p>
+      <div class="space-x-2">
+        <button onclick="prevPage()" class="px-3 py-1 border rounded">Prev</button>
+        <button onclick="nextPage()" class="px-3 py-1 border rounded">Next</button>
+      </div>
+    </div>
+
+    <!-- Modal -->
+    <div id="editModal" class="fixed inset-0 bg-black bg-opacity-30 hidden items-center justify-center">
+      <div class="bg-white p-6 rounded shadow-md w-96">
+        <h2 class="text-lg font-bold mb-4">Edit User</h2>
+        <input id="modalName" class="w-full mb-2 px-3 py-2 border rounded" placeholder="Name" />
+        <input id="modalEmail" class="w-full mb-2 px-3 py-2 border rounded" placeholder="Email" />
+        <input id="modalDepartment" class="w-full mb-2 px-3 py-2 border rounded" placeholder="Department" />
+        <select id="modalRole" class="w-full mb-4 px-3 py-2 border rounded">
+          <option>Admin</option>
+          <option>Editor</option>
+          <option>Viewer</option>
+        </select>
+        <div class="flex justify-end gap-2">
+          <button onclick="closeModal()" class="px-3 py-1 bg-gray-200 rounded">Cancel</button>
+          <button onclick="saveModal()" class="px-3 py-1 bg-blue-500 text-white rounded">Save</button>
+        </div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<script>
+let users = [
+  { name: "John Doe", email: "john@example.com", role: "Admin", department: "IT" },
+  { name: "Jane Smith", email: "jane@example.com", role: "Editor", department: "Marketing" },
+  { name: "Ali Khan", email: "ali.khan@example.com", role: "Viewer", department: "HR" },
+  { name: "Sara Ahmed", email: "sara@example.com", role: "Admin", department: "Finance" },
+  { name: "Usman Tariq", email: "usman@example.com", role: "Viewer", department: "IT" },
+  { name: "Maria Lopez", email: "maria@example.com", role: "Editor", department: "HR" },
+  { name: "Ayesha Rauf", email: "ayesha@example.com", role: "Admin", department: "Marketing" }
+];
+
+let pageSize = 5, currentPage = 1, filteredUsers = [...users];
+let sortKey = '', sortAsc = true;
+let editIndex = null;
+
+const searchInput = document.getElementById('searchInput');
+const roleFilter = document.getElementById('roleFilter');
+const deptFilter = document.getElementById('deptFilter');
+const userTable = document.getElementById('userTable');
+const pageInfo = document.getElementById('pageInfo');
+
+function initFilters() {
+  const roles = [...new Set(users.map(u => u.role))];
+  const depts = [...new Set(users.map(u => u.department))];
+
+  roleFilter.innerHTML = '<option value="All">All Roles</option>' + roles.map(r => `<option value="${r}">${r}</option>`).join('');
+  deptFilter.innerHTML = '<option value="All">All Departments</option>' + depts.map(d => `<option value="${d}">${d}</option>`).join('');
+
+  document.getElementById('dropdown-role').innerHTML = '<div onclick="setDropdownFilter(\'role\', \'All\')" class="cursor-pointer px-2 py-1 hover:bg-gray-100">All Roles</div>' +
+    roles.map(r => `<div onclick="setDropdownFilter('role', '${r}')" class="cursor-pointer px-2 py-1 hover:bg-gray-100">${r}</div>`).join('');
+
+  document.getElementById('dropdown-department').innerHTML = '<div onclick="setDropdownFilter(\'department\', \'All\')" class="cursor-pointer px-2 py-1 hover:bg-gray-100">All Departments</div>' +
+    depts.map(d => `<div onclick="setDropdownFilter('department', '${d}')" class="cursor-pointer px-2 py-1 hover:bg-gray-100">${d}</div>`).join('');
+}
+
+function toggleDropdown(type) {
+  document.querySelectorAll('.dropdown').forEach(el => el.classList.remove('show'));
+  document.getElementById(`dropdown-${type}`).classList.toggle('show');
+}
+
+function setDropdownFilter(type, value) {
+  if (type === 'role') roleFilter.value = value;
+  if (type === 'department') deptFilter.value = value;
+  applyFilters();
+  toggleDropdown(type);
+}
+
+searchInput.addEventListener('input', applyFilters);
+roleFilter.addEventListener('change', applyFilters);
+deptFilter.addEventListener('change', applyFilters);
+
+function applyFilters() {
+  const query = searchInput.value.toLowerCase();
+  const role = roleFilter.value;
+  const dept = deptFilter.value;
+  filteredUsers = users.filter(u =>
+    (u.name.toLowerCase().includes(query) || u.email.toLowerCase().includes(query)) &&
+    (role === 'All' || u.role === role) &&
+    (dept === 'All' || u.department === dept)
+  );
+  currentPage = 1;
+  renderTable();
+}
+
+function sortTable(key) {
+  sortAsc = sortKey === key ? !sortAsc : true;
+  sortKey = key;
+  filteredUsers.sort((a, b) => sortAsc ? a[key].localeCompare(b[key]) : b[key].localeCompare(a[key]));
+  renderTable();
+}
+
+function renderTable() {
+  const start = (currentPage - 1) * pageSize;
+  const usersToShow = filteredUsers.slice(start, start + pageSize);
+
+  userTable.innerHTML = usersToShow.map((u, i) => `
+    <tr>
+      <td class="px-6 py-3 text-sm" contenteditable="true" onblur="updateField(${start + i}, 'name', this.textContent)">${u.name}</td>
+      <td class="px-6 py-3 text-sm" contenteditable="true" onblur="updateField(${start + i}, 'email', this.textContent)">${u.email}</td>
+      <td class="px-6 py-3 text-sm" contenteditable="true" onblur="updateField(${start + i}, 'role', this.textContent)">${u.role}</td>
+      <td class="px-6 py-3 text-sm" contenteditable="true" onblur="updateField(${start + i}, 'department', this.textContent)">${u.department}</td>
+      <td class="px-6 py-3 text-sm text-right text-blue-600 cursor-pointer" onclick="openModal(${start + i})">Edit</td>
+    </tr>
+  `).join('');
+
+  pageInfo.textContent = `Showing ${start + 1} to ${Math.min(start + pageSize, filteredUsers.length)} of ${filteredUsers.length}`;
+}
+
+function updateField(index, field, value) {
+  users[index][field] = value;
+  applyFilters();
+}
+
+function nextPage() {
+  if ((currentPage * pageSize) < filteredUsers.length) {
+    currentPage++;
+    renderTable();
+  }
+}
+
+function prevPage() {
+  if (currentPage > 1) {
+    currentPage--;
+    renderTable();
+  }
+}
+
+function openModal(index) {
+  editIndex = index;
+  document.getElementById('modalName').value = users[index].name;
+  document.getElementById('modalEmail').value = users[index].email;
+  document.getElementById('modalDepartment').value = users[index].department;
+  document.getElementById('modalRole').value = users[index].role;
+  document.getElementById('editModal').classList.remove('hidden');
+  document.getElementById('editModal').classList.add('flex');
+}
+
+function closeModal() {
+  document.getElementById('editModal').classList.add('hidden');
+}
+
+function saveModal() {
+  users[editIndex].name = document.getElementById('modalName').value;
+  users[editIndex].email = document.getElementById('modalEmail').value;
+  users[editIndex].department = document.getElementById('modalDepartment').value;
+  users[editIndex].role = document.getElementById('modalRole').value;
+  closeModal();
+  applyFilters();
+}
+
+initFilters();
+applyFilters();
+</script>
+</body>
+</html>
